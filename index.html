@@ -902,14 +902,33 @@
     el('settingsCard').scrollIntoView({behavior:'smooth', block:'start'});
   });
 
+  // abriu por ter tocado na notificação de lembrete (app estava fechado)?
+  const openedFromReminder = new URLSearchParams(location.search).get('reminder') === '1';
+  if(openedFromReminder && location.search){
+    history.replaceState(null, '', location.pathname);
+  }
+
   greetNow();
   render();
   scheduleReminders();
   checkBusyTimeout();
-  if(state.pendingReminder) openReminderModal();
+  if(state.pendingReminder || openedFromReminder){
+    state.pendingReminder = true; saveState();
+    openReminderModal();
+  }
   if(state.apiBase){
     reconcileWithBackend();
     if(state.remindersOn) subscribeToPush();
+  }
+
+  // service worker avisa quando um push de água chega com o app já aberto
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.addEventListener('message', ev=>{
+      if(ev.data && ev.data.type === 'water-reminder'){
+        state.pendingReminder = true; saveState();
+        openReminderModal();
+      }
+    });
   }
 
   if('serviceWorker' in navigator){

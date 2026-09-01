@@ -1,4 +1,4 @@
-const CACHE = 'aguinha-v5';
+const CACHE = 'aguinha-v6';
 const ASSETS = [
   './',
   './index.html',
@@ -47,7 +47,15 @@ self.addEventListener('push', event => {
     actions: payload.actions || [],
     data: payload.data || {}
   };
-  event.waitUntil(self.registration.showNotification(payload.title || 'Águinha 💧', opts));
+  event.waitUntil(
+    self.registration.showNotification(payload.title || 'Águinha 💧', opts).then(() => {
+      // lembrete de água: avisa a página (se estiver aberta) pra abrir o modal da foto
+      if((payload.tag || '') === 'water-reminder'){
+        return clients.matchAll({ type: 'window', includeUncontrolled: true })
+          .then(list => list.forEach(c => c.postMessage({ type: 'water-reminder' })));
+      }
+    })
+  );
 });
 
 self.addEventListener('notificationclick', event => {
@@ -69,11 +77,19 @@ self.addEventListener('notificationclick', event => {
     return;
   }
 
-  // ação padrão (ou toque no corpo da notificação): abre/foca o app
+  // ação padrão (toque no corpo) ou 'open-app': abre/foca o app.
+  // Se for lembrete de água, sinaliza pra página abrir o modal da foto.
+  const isWater = (event.notification.tag || '') === 'water-reminder';
+  const url = isWater ? './index.html?reminder=1' : './index.html';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-      for(const c of list){ if('focus' in c) return c.focus(); }
-      if(clients.openWindow) return clients.openWindow('./index.html');
+      for(const c of list){
+        if('focus' in c){
+          if(isWater) c.postMessage({ type: 'water-reminder' });
+          return c.focus();
+        }
+      }
+      if(clients.openWindow) return clients.openWindow(url);
     })
   );
 });
