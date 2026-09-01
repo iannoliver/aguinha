@@ -435,14 +435,6 @@
     </div>
 
     <hr class="sep">
-    <div class="field-label">Servidor de notificações</div>
-    <div class="field-sub">Cole aqui a URL do backend (depois do deploy) pra ativar o alarme mesmo com o app fechado no iPhone</div>
-    <input class="custom-input" id="apiBaseInput" type="url" placeholder="https://aguinha-backend.onrender.com" style="margin-top:8px; width:100%;">
-    <div class="field-label" style="margin-top:14px;">Chave de API</div>
-    <div class="field-sub">A mesma que você colocou em API_SECRET no servidor (deixe em branco se não configurou)</div>
-    <input class="custom-input" id="apiSecretInput" type="password" placeholder="chave secreta" style="margin-top:8px; width:100%;">
-
-    <hr class="sep">
     <div class="row-between">
       <div>
         <div class="field-label">Meta diária</div>
@@ -489,6 +481,7 @@
 <script>
 (function(){
   const KEY = 'aguinha_state_v1';
+  const BACKEND_URL = 'https://aguinha-backend.onrender.com'; // servidor de push, embutido
   const todayStr = () => new Date().toISOString().slice(0,10);
   const dayNames = ['D','S','T','Q','Q','S','S'];
 
@@ -505,8 +498,8 @@
     s.maxStreak = s.maxStreak || 0;
     s.busy = s.busy || null; // { reason:'atendimento'|'auxiliando', since: <timestamp ms> }
     s.pendingReminder = !!s.pendingReminder;
-    s.apiBase = s.apiBase || '';
-    s.apiSecret = s.apiSecret || '';
+    s.apiBase = BACKEND_URL; // fixo, embutido no app — ela não vê nem configura nada
+    delete s.apiSecret;
     if(!(todayStr() in s.history)) s.history[todayStr()] = s.history[todayStr()] || 0;
     return s;
   }
@@ -554,11 +547,24 @@
     ['Toc toc 💚','Sua gotinha tá com saudade.']
   ];
 
+  const GREETINGS = {
+    manha: [
+      'Bom dia, Milady 💛 Bora começar bem hidratada?',
+      'Acordou, Pitica? Primeiro golinho d’água do dia já 💧'
+    ],
+    tarde: [
+      'Boa tarde, Milady! Já bebeu água agora há pouco?',
+      'Oi, Pitica 💚 Meio do dia é hora de caprichar na água.'
+    ],
+    noite: [
+      'Boa noite, Milady 🌙 Faltam só uns golinhos pra meta de hoje.',
+      'Pitica, reta final do dia — mais um copinho e você fecha a meta 💪'
+    ]
+  };
   function greetNow(){
     const h = new Date().getHours();
-    if(h < 12) greeting.textContent = 'Bom dia! Bora começar bem hidratada?';
-    else if(h < 18) greeting.textContent = 'Boa tarde! Já bebeu água agora há pouco?';
-    else greeting.textContent = 'Boa noite! Faltam só uns golinhos pra meta.';
+    const bucket = h < 12 ? GREETINGS.manha : h < 18 ? GREETINGS.tarde : GREETINGS.noite;
+    greeting.textContent = bucket[Math.floor(Math.random() * bucket.length)];
   }
 
   function render(){
@@ -595,8 +601,6 @@
     });
     el('startTime').value = state.start;
     el('endTime').value = state.end;
-    el('apiBaseInput').value = state.apiBase;
-    el('apiSecretInput').value = state.apiSecret;
 
     renderWeek();
     renderLevel();
@@ -732,9 +736,8 @@
 
   // ---- integração com o backend (push real, funciona com o app fechado no iPhone) ----
   function apiHeaders(){
-    const h = { 'Content-Type': 'application/json' };
-    if(state.apiSecret) h['x-api-key'] = state.apiSecret;
-    return h;
+    // sem segredo no cliente: o backend autoriza pela origem (ALLOWED_ORIGINS)
+    return { 'Content-Type': 'application/json' };
   }
 
   function urlBase64ToUint8Array(base64String){
@@ -891,15 +894,6 @@
   });
   el('startTime').addEventListener('change', e=>{ state.start = e.target.value; saveState(); syncSettingsToBackend(); });
   el('endTime').addEventListener('change', e=>{ state.end = e.target.value; saveState(); syncSettingsToBackend(); });
-  el('apiBaseInput').addEventListener('change', e=>{
-    state.apiBase = e.target.value.trim().replace(/\/$/, '');
-    saveState();
-    if(state.apiBase){ subscribeToPush(); syncSettingsToBackend(); reconcileWithBackend(); }
-  });
-  el('apiSecretInput').addEventListener('change', e=>{
-    state.apiSecret = e.target.value.trim();
-    saveState();
-  });
   el('goalInput').addEventListener('change', e=>{
     const v = Number(e.target.value);
     if(v>0){ state.goal = v; saveState(); render(); }
