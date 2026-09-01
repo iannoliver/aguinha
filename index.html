@@ -219,6 +219,45 @@
     cursor:pointer;
   }
   .chip.active{ background:var(--forest); color:var(--cream); border-color:var(--mint); }
+  .chip.locked{ opacity:.4; }
+  .chip.busy-active{ background:var(--peach); color:#3a2400; border-color:var(--peach); }
+
+  .level-line{ display:flex; align-items:center; gap:6px; font-size:.78rem; color:var(--mint-soft); font-weight:800; margin-top:2px; }
+
+  .badge-grid{ display:flex; flex-wrap:wrap; gap:8px; }
+  .badge-chip{
+    padding:8px 12px; border-radius:14px; background:var(--ink);
+    border:1px solid var(--line); font-size:.78rem; font-weight:700; color:var(--cream-dim);
+  }
+  .badge-chip.unlocked{ background:var(--forest); color:var(--cream); border-color:var(--mint); }
+
+  .status-elapsed{ font-size:.78rem; color:var(--peach); font-weight:700; margin-top:8px; }
+
+  /* ---------- modal (confirmação por foto) ---------- */
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(6,10,8,0.78);
+    display:none; align-items:center; justify-content:center; z-index:80; padding:20px;
+  }
+  .modal-overlay.show{ display:flex; }
+  .modal-card{
+    width:100%; max-width:380px; background:var(--card-2); border:1px solid var(--line);
+    border-radius:22px; padding:22px; box-shadow:var(--shadow); text-align:center;
+  }
+  .modal-card h3{ margin:0 0 8px; font-size:1.15rem; }
+  .modal-card p{ font-size:.88rem; color:var(--cream-dim); margin:0 0 16px; }
+  .photo-btn{
+    width:100%; background:linear-gradient(180deg, var(--mint) 0%, #63d69e 100%);
+    color:#0B1B13; border:none; border-radius:16px; font-family:'Baloo 2'; font-weight:700;
+    font-size:1rem; padding:14px; cursor:pointer;
+  }
+  .photo-btn:active{ transform:scale(0.97); }
+  #photoPreview{ width:100%; max-height:160px; object-fit:cover; border-radius:14px; margin-top:12px; display:none; }
+  .modal-quick-row{ display:flex; gap:8px; margin-top:14px; }
+  .modal-quick-row .qbtn.disabled{ opacity:.35; pointer-events:none; }
+  .busy-link-btn{
+    margin-top:14px; background:none; border:none; color:var(--cream-dim);
+    font-size:.8rem; text-decoration:underline; cursor:pointer; padding:6px;
+  }
 
   .time-row{ display:flex; gap:10px; margin-top:12px; }
   .time-field{ flex:1; }
@@ -279,6 +318,7 @@
       <div>
         <p class="greeting" id="greeting">Oi! Bora se cuidar hoje?</p>
         <p class="goal-label">Meta: <b id="goalLabel">2000</b> ml</p>
+        <p class="level-line" id="levelLine">⭐ Nv. 1 · 0 pts</p>
       </div>
       <div class="drop-wrap" id="mascotWrap">
         <svg viewBox="0 0 96 112" id="mascot">
@@ -347,6 +387,23 @@
     <div class="streak-line" id="streakLine">🔥 <b>0 dias</b> seguidos batendo a meta</div>
   </section>
 
+  <!-- STATUS / EM ATENDIMENTO -->
+  <section class="card" id="statusCard">
+    <h2>🩺 Status</h2>
+    <div class="chip-row" id="statusChips">
+      <div class="chip" data-status="atendimento">Em atendimento</div>
+      <div class="chip" data-status="auxiliando">Auxiliando doutora</div>
+    </div>
+    <div class="field-sub" id="statusNote2">Lembretes ativos normalmente 💚</div>
+    <div class="status-elapsed" id="statusElapsed" style="display:none;"></div>
+  </section>
+
+  <!-- CONQUISTAS -->
+  <section class="card" id="badgesCard">
+    <h2>🏅 Conquistas</h2>
+    <div class="badge-grid" id="badgesList"></div>
+  </section>
+
   <!-- LEMBRETES -->
   <section class="card" id="settingsCard">
     <h2>⏰ Lembretes</h2>
@@ -378,6 +435,14 @@
     </div>
 
     <hr class="sep">
+    <div class="field-label">Servidor de notificações</div>
+    <div class="field-sub">Cole aqui a URL do backend (depois do deploy) pra ativar o alarme mesmo com o app fechado no iPhone</div>
+    <input class="custom-input" id="apiBaseInput" type="url" placeholder="https://aguinha-backend.onrender.com" style="margin-top:8px; width:100%;">
+    <div class="field-label" style="margin-top:14px;">Chave de API</div>
+    <div class="field-sub">A mesma que você colocou em API_SECRET no servidor (deixe em branco se não configurou)</div>
+    <input class="custom-input" id="apiSecretInput" type="password" placeholder="chave secreta" style="margin-top:8px; width:100%;">
+
+    <hr class="sep">
     <div class="row-between">
       <div>
         <div class="field-label">Meta diária</div>
@@ -392,6 +457,33 @@
 <div class="toast" id="toast">
   <svg viewBox="0 0 96 112"><path d="M48 4C48 4 12 46 12 70a36 36 0 0 0 72 0C84 46 48 4 48 4Z" fill="#7FE7B4"/></svg>
   <div class="toast-text"><b id="toastTitle">Hora da água!</b><span id="toastBody">Que tal um golinho agora?</span></div>
+</div>
+
+<!-- MODAL: só fecha depois da foto do copo -->
+<div class="modal-overlay" id="reminderModal">
+  <div class="modal-card">
+    <h3>💧 Hora da água!</h3>
+    <p>Manda uma fotinho do copo na mão pra confirmar e pausar o alarme.</p>
+    <button class="photo-btn" id="takePhotoBtn">📷 Tirar foto do copo</button>
+    <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none">
+    <img id="photoPreview" alt="prévia da foto">
+    <div class="modal-quick-row" id="modalQuickRow">
+      <div class="qbtn disabled" data-ml="200"><span class="ml">200ml</span></div>
+      <div class="qbtn disabled" data-ml="300"><span class="ml">300ml</span></div>
+      <div class="qbtn disabled" data-ml="500"><span class="ml">500ml</span></div>
+    </div>
+    <button class="busy-link-btn" id="busyFromModalBtn">🩺 Estou em atendimento agora</button>
+  </div>
+</div>
+
+<!-- MODAL: checagem automática depois de 2h em atendimento -->
+<div class="modal-overlay" id="busyCheckModal">
+  <div class="modal-card">
+    <h3 id="busyCheckTitle">Ainda em atendimento?</h3>
+    <p>Já se passaram 2 horas. Você ainda está nessa correria?</p>
+    <button class="photo-btn" id="stillBusyBtn">Sim, ainda estou</button>
+    <button class="busy-link-btn" id="notBusyBtn">Não, já terminei — voltar aos lembretes</button>
+  </div>
 </div>
 
 <script>
@@ -409,6 +501,12 @@
     s.interval = s.interval || 90;
     s.start = s.start || '08:00';
     s.end = s.end || '22:00';
+    s.points = s.points || 0;
+    s.maxStreak = s.maxStreak || 0;
+    s.busy = s.busy || null; // { reason:'atendimento'|'auxiliando', since: <timestamp ms> }
+    s.pendingReminder = !!s.pendingReminder;
+    s.apiBase = s.apiBase || '';
+    s.apiSecret = s.apiSecret || '';
     if(!(todayStr() in s.history)) s.history[todayStr()] = s.history[todayStr()] || 0;
     return s;
   }
@@ -429,12 +527,30 @@
   const weekRow = el('weekRow');
   const streakLine = el('streakLine');
   const toast = el('toast');
+  const levelLine = el('levelLine');
+  const badgesList = el('badgesList');
+  const statusNote2 = el('statusNote2');
+  const statusElapsed = el('statusElapsed');
+  const reminderModal = el('reminderModal');
+  const busyCheckModal = el('busyCheckModal');
+  const photoInput = el('photoInput');
+  const photoPreview = el('photoPreview');
+
+  const BADGE_DEFS = [
+    {id:'streak3', min:3, label:'🔥 3 dias seguidos'},
+    {id:'streak7', min:7, label:'💧 7 dias seguidos'},
+    {id:'streak14', min:14, label:'🌿 14 dias seguidos'},
+    {id:'streak30', min:30, label:'🏆 30 dias seguidos'}
+  ];
+  const LEVEL_TITLES = ['Gotinha Iniciante','Fluida Aprendiz','Hidratada Nível 2','Craque da Hidratação','Mestre das Águas','Lendária da Hidratação'];
+  // Precisa ser EXATAMENTE a mesma chave pública gerada no backend (.env.example / README)
+  const VAPID_PUBLIC_KEY = 'BLyis4-_g6ntI1cGVBltB8GD_biRQh5VVvpaMk9n6bvVTH67BoVmf2_vCkk5flEF7IhvQegaO8IsKBIu91KUwsM';
 
   const MESSAGES = [
     ['Hora da água! 💧','Que tal um golinho agora?'],
     ['Psiu 👀','Seu corpo tá pedindo água!'],
     ['Oi de novo!','Bora manter o ritmo, você consegue.'],
-    ['Só uma pausinha','Um copo d\u2019água e volta pro que tava fazendo.'],
+    ['Só uma pausinha','Um copo d’água e volta pro que tava fazendo.'],
     ['Toc toc 💚','Sua gotinha tá com saudade.']
   ];
 
@@ -479,8 +595,47 @@
     });
     el('startTime').value = state.start;
     el('endTime').value = state.end;
+    el('apiBaseInput').value = state.apiBase;
+    el('apiSecretInput').value = state.apiSecret;
 
     renderWeek();
+    renderLevel();
+    renderBadges();
+    renderStatus();
+  }
+
+  function renderLevel(){
+    const level = Math.floor(state.points/100) + 1;
+    const title = LEVEL_TITLES[Math.min(level-1, LEVEL_TITLES.length-1)];
+    levelLine.textContent = `⭐ Nv. ${level} · ${state.points} pts · ${title}`;
+  }
+
+  function renderBadges(){
+    badgesList.innerHTML = '';
+    BADGE_DEFS.forEach(b=>{
+      const unlocked = state.maxStreak >= b.min;
+      const chip = document.createElement('div');
+      chip.className = 'badge-chip' + (unlocked ? ' unlocked' : '');
+      chip.textContent = unlocked ? b.label : `🔒 ${b.min} dias seguidos`;
+      badgesList.appendChild(chip);
+    });
+  }
+
+  function renderStatus(){
+    document.querySelectorAll('#statusChips .chip').forEach(c=>{
+      c.classList.toggle('busy-active', !!state.busy && state.busy.reason === c.dataset.status);
+    });
+    if(state.busy){
+      const mins = Math.floor((Date.now() - state.busy.since) / 60000);
+      const h = Math.floor(mins/60), m = mins%60;
+      const label = state.busy.reason === 'atendimento' ? 'Em atendimento' : 'Auxiliando doutora';
+      statusNote2.textContent = `🩺 ${label} — lembretes pausados`;
+      statusElapsed.style.display = 'block';
+      statusElapsed.textContent = `Pausado há ${h}h${m}min`;
+    } else {
+      statusNote2.textContent = 'Lembretes ativos normalmente 💚';
+      statusElapsed.style.display = 'none';
+    }
   }
 
   function renderWeek(){
@@ -511,11 +666,13 @@
       else break;
     }
     streakLine.innerHTML = '🔥 <b>' + streak + ' dia' + (streak===1?'':'s') + '</b> seguidos batendo a meta';
+    if(streak > state.maxStreak){ state.maxStreak = streak; saveState(); }
   }
 
-  function addWater(ml){
+  function addWater(ml, bonus){
     const today = todayStr();
     state.history[today] = (state.history[today]||0) + ml;
+    state.points += 10 + Math.floor(ml/50) + (bonus||0);
     saveState();
     render();
     bounceMascot();
@@ -552,12 +709,19 @@
     if(!state.remindersOn) return;
     reminderTimer = setInterval(()=>{
       if(!withinWindow()) return;
-      const [t,b] = MESSAGES[Math.floor(Math.random()*MESSAGES.length)];
-      showToast(t,b);
-      if('Notification' in window && Notification.permission === 'granted'){
-        try{ new Notification(t, {body:b, icon:'icons/icon-192.png'}); }catch(e){}
-      }
+      if(state.busy) return; // em atendimento: não dispara
+      triggerReminder();
     }, state.interval*60*1000);
+  }
+
+  function triggerReminder(){
+    const [t,b] = MESSAGES[Math.floor(Math.random()*MESSAGES.length)];
+    state.pendingReminder = true;
+    saveState();
+    if('Notification' in window && Notification.permission === 'granted'){
+      try{ new Notification(t, {body:'Abra o Águinha e manda a foto do copo pra pausar 📷', icon:'icons/icon-192.png'}); }catch(e){}
+    }
+    openReminderModal();
   }
 
   function requestNotifPermission(){
@@ -566,8 +730,144 @@
     }
   }
 
+  // ---- integração com o backend (push real, funciona com o app fechado no iPhone) ----
+  function apiHeaders(){
+    const h = { 'Content-Type': 'application/json' };
+    if(state.apiSecret) h['x-api-key'] = state.apiSecret;
+    return h;
+  }
+
+  function urlBase64ToUint8Array(base64String){
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g,'+').replace(/_/g,'/');
+    const raw = atob(base64);
+    return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+  }
+
+  async function subscribeToPush(){
+    if(!state.apiBase || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    try{
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if(!sub){
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+        });
+      }
+      await fetch(state.apiBase + '/api/subscribe', {
+        method:'POST', headers: apiHeaders(),
+        body: JSON.stringify({ subscription: sub })
+      });
+    }catch(e){ console.error('Não deu pra inscrever no push:', e); }
+  }
+
+  async function syncSettingsToBackend(){
+    if(!state.apiBase) return;
+    try{
+      await fetch(state.apiBase + '/api/settings', {
+        method:'POST', headers: apiHeaders(),
+        body: JSON.stringify({ remindersOn: state.remindersOn, interval: state.interval, start: state.start, end: state.end })
+      });
+    }catch(e){ console.error('Não deu pra sincronizar config com o backend:', e); }
+  }
+
+  async function syncBusyToBackend(reason){
+    if(!state.apiBase) return;
+    try{
+      await fetch(state.apiBase + '/api/busy', {
+        method:'POST', headers: apiHeaders(),
+        body: JSON.stringify({ reason })
+      });
+    }catch(e){ console.error('Não deu pra sincronizar status com o backend:', e); }
+  }
+
+  async function reconcileWithBackend(){
+    if(!state.apiBase) return;
+    try{
+      const resp = await fetch(state.apiBase + '/api/state');
+      if(!resp.ok) return;
+      const remote = await resp.json();
+      // o backend é quem sabe se o modo "em atendimento" já foi encerrado
+      // remotamente (via botão "Não" na notificação, com o app fechado)
+      state.busy = remote.busy || null;
+      state.remindersOn = remote.remindersOn;
+      state.interval = remote.interval;
+      state.start = remote.start;
+      state.end = remote.end;
+      saveState(); render(); scheduleReminders();
+    }catch(e){ console.error('Não deu pra sincronizar com o backend:', e); }
+  }
+
+  // ---- modal: confirmação por foto ----
+  let photoTaken = false;
+  function openReminderModal(){
+    photoTaken = false;
+    photoPreview.style.display = 'none';
+    photoInput.value = '';
+    document.querySelectorAll('#modalQuickRow .qbtn').forEach(b=> b.classList.add('disabled'));
+    reminderModal.classList.add('show');
+  }
+  function closeReminderModal(){
+    reminderModal.classList.remove('show');
+    state.pendingReminder = false;
+    saveState();
+  }
+  el('takePhotoBtn').addEventListener('click', ()=> photoInput.click());
+  photoInput.addEventListener('change', ()=>{
+    if(!photoInput.files || !photoInput.files[0]) return;
+    photoTaken = true;
+    photoPreview.src = URL.createObjectURL(photoInput.files[0]);
+    photoPreview.style.display = 'block';
+    document.querySelectorAll('#modalQuickRow .qbtn').forEach(b=> b.classList.remove('disabled'));
+  });
+  document.querySelectorAll('#modalQuickRow .qbtn').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      if(!photoTaken) return;
+      addWater(Number(b.dataset.ml), 5);
+      closeReminderModal();
+      showToast('Confirmado! 📸', 'Alarme pausado até o próximo lembrete.');
+    });
+  });
+  el('busyFromModalBtn').addEventListener('click', ()=>{
+    setBusy('atendimento');
+    closeReminderModal();
+  });
+
+  // ---- modo "em atendimento" / "auxiliando doutora" ----
+  function setBusy(reason){
+    if(state.busy && state.busy.reason === reason){
+      state.busy = null; // clicou de novo: volta ao normal
+    } else {
+      state.busy = { reason, since: Date.now() };
+    }
+    saveState(); render();
+    syncBusyToBackend(reason);
+  }
+  document.querySelectorAll('#statusChips .chip').forEach(c=>{
+    c.addEventListener('click', ()=> setBusy(c.dataset.status));
+  });
+
+  function checkBusyTimeout(){
+    if(!state.busy) return;
+    if(Date.now() - state.busy.since >= 2*60*60*1000){
+      busyCheckModal.classList.add('show');
+    }
+  }
+  el('stillBusyBtn').addEventListener('click', ()=>{
+    if(state.busy){ state.busy.since = Date.now(); saveState(); render(); }
+    busyCheckModal.classList.remove('show');
+  });
+  el('notBusyBtn').addEventListener('click', ()=>{
+    state.busy = null;
+    saveState(); render();
+    busyCheckModal.classList.remove('show');
+    showToast('Bem-vinda de volta! 💚', 'Os lembretes voltaram a 100%.');
+  });
+  setInterval(checkBusyTimeout, 30*1000);
+
   // ---- events ----
-  document.querySelectorAll('.qbtn').forEach(b=>{
+  document.querySelectorAll('.quick-row .qbtn').forEach(b=>{
     b.addEventListener('click', ()=> addWater(Number(b.dataset.ml)));
   });
   el('customAdd').addEventListener('click', ()=>{
@@ -580,17 +880,26 @@
 
   el('remindToggle').addEventListener('click', ()=>{
     state.remindersOn = !state.remindersOn;
-    if(state.remindersOn) requestNotifPermission();
-    saveState(); render(); scheduleReminders();
+    if(state.remindersOn){ requestNotifPermission(); subscribeToPush(); }
+    saveState(); render(); scheduleReminders(); syncSettingsToBackend();
   });
   document.querySelectorAll('#intervalChips .chip').forEach(c=>{
     c.addEventListener('click', ()=>{
       state.interval = Number(c.dataset.min);
-      saveState(); render(); scheduleReminders();
+      saveState(); render(); scheduleReminders(); syncSettingsToBackend();
     });
   });
-  el('startTime').addEventListener('change', e=>{ state.start = e.target.value; saveState(); });
-  el('endTime').addEventListener('change', e=>{ state.end = e.target.value; saveState(); });
+  el('startTime').addEventListener('change', e=>{ state.start = e.target.value; saveState(); syncSettingsToBackend(); });
+  el('endTime').addEventListener('change', e=>{ state.end = e.target.value; saveState(); syncSettingsToBackend(); });
+  el('apiBaseInput').addEventListener('change', e=>{
+    state.apiBase = e.target.value.trim().replace(/\/$/, '');
+    saveState();
+    if(state.apiBase){ subscribeToPush(); syncSettingsToBackend(); reconcileWithBackend(); }
+  });
+  el('apiSecretInput').addEventListener('change', e=>{
+    state.apiSecret = e.target.value.trim();
+    saveState();
+  });
   el('goalInput').addEventListener('change', e=>{
     const v = Number(e.target.value);
     if(v>0){ state.goal = v; saveState(); render(); }
@@ -602,6 +911,12 @@
   greetNow();
   render();
   scheduleReminders();
+  checkBusyTimeout();
+  if(state.pendingReminder) openReminderModal();
+  if(state.apiBase){
+    reconcileWithBackend();
+    if(state.remindersOn) subscribeToPush();
+  }
 
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('service-worker.js').catch(()=>{});
